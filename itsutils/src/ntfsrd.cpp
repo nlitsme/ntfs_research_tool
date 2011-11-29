@@ -310,7 +310,7 @@ public:
         }
         void save(const std::string& savename)
         {
-            ReadWriter_ptr fsave(new FileReader(savename, FileReader::create));
+            ReadWriter_ptr fsave(new FileReader(savename, FileReader::createnew));
             uint64_t total= 0;
             ntfsattr_ptr dattr= find_attr_for_type(ntfsattr::AT_DATA);  // AT_VOLUME_INFORMATION ??
             if (dattr)
