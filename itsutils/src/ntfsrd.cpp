@@ -139,7 +139,7 @@ public:
                     if (_valofs>_length || _valofs+_vallen>_length)
                         throw "val out of range";
                 }
-                if (_nameoffset>_length || _nameoffset+2*_namelength>_length)
+                if (_nameoffset>_length || unsigned(_nameoffset+2*_namelength)>_length)
                     throw "name out of range";
 
                 if (_length-_database > 512)
@@ -157,7 +157,7 @@ public:
                     //printf("note: %d > %d : %d extra bytes at end of attribute\n", _data.size(), _datalength, _data.size()-_datalength);
                 }
                 else if (_data.size()<_datalength)
-                    printf("ERROR: %d < %d : attr too short\n", _data.size(), _datalength);
+                    printf("ERROR: %d < %d : attr too short\n", (int)_data.size(), _datalength);
 
                 if (_datalength>512)
                     throw "attr too large";
@@ -311,7 +311,7 @@ public:
         void save(const std::string& savename)
         {
             ReadWriter_ptr fsave(new FileReader(savename, FileReader::createnew));
-            uint64_t total= 0;
+
             ntfsattr_ptr dattr= find_attr_for_type(ntfsattr::AT_DATA);  // AT_VOLUME_INFORMATION ??
             if (dattr)
                 dattr->copyto(fsave);
@@ -367,7 +367,7 @@ public:
     }
 
     ReadWriter_ptr rd() const { return _r; }
-    uint64_t clustersize() const { return _clustersize; }
+    uint32_t clustersize() const { return _clustersize; }
 };
 class ntfsboot {
     ReadWriter_ptr _r;
@@ -548,7 +548,7 @@ int main(int argc,char**argv)
             bootofs.push_back(ofs);
         }
         if ((ofs&0xFFFFFFF)==0) {
-            fprintf(stderr, "%12llx  %9d bytes/sec      \r", ofs, double(1000000.0*0x10000000)/t.lap());
+            fprintf(stderr, "%12llx  %9.0f bytes/sec      \r", ofs, double(1000000.0*0x10000000)/t.lap());
         }
     }
     printf("FOUND: mft=0x%llx, mir=0x%llx dsk=0x%llx  clus=0x%x\n", mftclus, mirclus, dsksize, disk->clustersize());
