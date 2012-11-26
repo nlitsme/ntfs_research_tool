@@ -451,7 +451,7 @@ int main(int argc,char**argv)
     {
         if (argv[i][0]=='-') switch(argv[i][1])
         {
-            case 'v': verbose++; break;
+            case 'v': verbose=true; break;
             case 'd': getarg(argv, i, argc, savedir); break;
             case 'o': getarg(argv, i, argc, diskstart); break;
             case 'l': getarg(argv, i, argc, disksize); break;
