@@ -417,6 +417,9 @@ void usage()
     fprintf(stderr, "  -o DISKSTART\n");
     fprintf(stderr, "  -l DISKSIZE\n");
     fprintf(stderr, "  -c CLUSSIZE    specify clustersize\n");
+    fprintf(stderr, "  -f OFFSET      where to start searching\n");
+    fprintf(stderr, "  -m OFFSET      specify mft offset\n");
+    fprintf(stderr, "  -b OFFSET      specify boot offset\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "the CLUSSIZE and DISKSTART are needed when you want to copy files\n");
     fprintf(stderr, "they can either be obtained from the bootsector, or manually specified\n");
@@ -442,21 +445,29 @@ int main(int argc,char**argv)
     bool verbose= false;
     std::string devname;
     std::string savedir;
-    uint64_t diskstart=0;
+    uint64_t diskstart=0;    bool diskstartspecified = false;
     uint64_t disksize=0;
-    uint64_t fileentofs= 0;
+    uint64_t fileentofs= 0;  bool filentspecified = false;
     uint32_t clustersize= 0;
+    uint64_t mtfent_offset = 0;
     std::set<std::string> files;
+
+    std::vector<uint64_t> mftentofs;
+    std::vector<uint64_t> bootofs;
+
+
     for (int i=1 ; i<argc ; i++)
     {
         if (argv[i][0]=='-') switch(argv[i][1])
         {
             case 'v': verbose=true; break;
-            case 'd': getarg(argv, i, argc, savedir); break;
-            case 'o': getarg(argv, i, argc, diskstart); break;
-            case 'l': getarg(argv, i, argc, disksize); break;
-            case 'c': getarg(argv, i, argc, clustersize); break;
-            case 'f': getarg(argv, i, argc, fileentofs); break;
+            case 'd': savedir = getstrarg(argv, i, argc); break;
+            case 'o': diskstart = getintarg(argv, i, argc); break;
+            case 'l': disksize = getintarg(argv, i, argc); break;
+            case 'c': clustersize = getintarg(argv, i, argc); break;
+            case 'f': fileentofs = getintarg(argv, i, argc); filentspecified = true; break;
+            case 'm': mtfent_offset = getintarg(argv, i, argc); break;
+            case 'b': bootofs.push_back( getintarg(argv, i, argc) ); break;
             default:
                       usage();
                       return 1;
@@ -475,22 +486,22 @@ int main(int argc,char**argv)
     ReadWriter_ptr f;
     if (FileReader::isblockdev(devname)) {
         f.reset(new BlockDevice(devname, BlockDevice::readonly));
+        printf("blockdev reader\n");
     }
     else {
         f.reset(new MmapReader(devname, MmapReader::readonly));
+        printf("mmap reader\n");
     }
-    if (diskstart || disksize) {
+    if (diskstartspecified || disksize) {
         if (disksize==0)
             disksize= f->size()-diskstart;
         f.reset(new OffsetReader(f, diskstart, disksize));
+        printf("restricted to %08llx - %08llx\n", diskstart, disksize);
     }
 
     ntfsdisk_ptr disk(new ntfsdisk(f));
     if (clustersize) 
         disk->setclustersize(clustersize);
-
-    std::vector<uint64_t> mftentofs;
-    std::vector<uint64_t> bootofs;
 
     auto mksetter= [](uint64_t& val, const char*msg) {
         return [&val, msg](uint64_t newval)
@@ -511,12 +522,15 @@ int main(int argc,char**argv)
     uint64_t dsksize= 0;
     auto setdsksize= mksetter(dsksize, "dsksize values");
  
+    if (mtfent_offset)
+        mftentofs.push_back(mtfent_offset);
     HiresTimer t;
-    for (uint64_t ofs= fileentofs ; ofs < (fileentofs ? (fileentofs+0x200) : f->size()) ; ofs+=0x200)
+    for (uint64_t ofs= fileentofs ; ofs < (filentspecified ? (fileentofs+0x200) : f->size()) ; ofs+=0x200)
     {
         f->setpos(ofs);
+        try {
         uint32_t magic= f->read32le();
-        if (magic==0x454c4946) {
+        if (magic==0x454c4946) {            // $MFT/$DATA: Mft entry - magic_FILE
             ntfsdisk::ntfsfile nf(disk, ofs);
 
             if (verbose)
@@ -538,7 +552,7 @@ int main(int argc,char**argv)
                 setmirclus(nf.firstcluster());
             }
         }
-        else if (magic==0x4e9052eb) {
+        else if (magic==0x4e9052eb) {    // magic for bootsector
             ntfsboot boot(f, ofs);
 
             disk->setclustersize(boot.clustersize());
@@ -546,6 +560,16 @@ int main(int argc,char**argv)
             setmirclus(boot.mirclus());
             setdsksize(boot.nsectors());
             bootofs.push_back(ofs);
+        }
+        }
+        catch(const std::exception& e) {
+            printf("ERR reading %08llx: %s\n", ofs, e.what());
+        }
+        catch(const char*msg) {
+            printf("ERR reading %08llx: %s\n", ofs, msg);
+        }
+        catch(...) {
+            printf("ERR reading %08llx\n", ofs);
         }
         if ((ofs&0xFFFFFFF)==0) {
             fprintf(stderr, "%12llx  %9.0f bytes/sec      \r", ofs, double(1000000.0*0x10000000)/t.lap());
