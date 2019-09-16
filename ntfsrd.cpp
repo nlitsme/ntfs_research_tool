@@ -1,7 +1,7 @@
 #include <vector>
 #include <map>
 #include <set>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include "util/HiresTimer.h"
 #include "util/ReadWriter.h"
 #include "util/rw/BlockDevice.h"
@@ -12,7 +12,7 @@
 
 // /Users/itsme/gitprj/repos/ntfsprogs-2.0.0/include/ntfs/layout.h
 class ntfsdisk;
-typedef boost::shared_ptr<ntfsdisk> ntfsdisk_ptr;
+typedef std::shared_ptr<ntfsdisk> ntfsdisk_ptr;
 class ntfsdisk {
     ReadWriter_ptr  _r;
     uint32_t _clustersize;
@@ -253,7 +253,7 @@ public:
                 return names[(_type>>4)-1];
             }
         };
-        typedef boost::shared_ptr<ntfsattr> ntfsattr_ptr;
+        typedef std::shared_ptr<ntfsattr> ntfsattr_ptr;
 
         typedef std::vector<ntfsattr_ptr> ntfsattr_list;
         ntfsattr_list _attrs;
@@ -387,8 +387,8 @@ class ntfsboot {
     bool readheader()
     {
         _r->setpos(_ofs+0x03);
-        std::string magic;
-        _r->readstr(magic, 8);
+        std::string magic(8, 0);
+        _r->read((uint8_t*)&magic[0], 8);
         if (magic!="NTFS    ")
             return false;
         uint16_t bytespersector= _r->read16le();
